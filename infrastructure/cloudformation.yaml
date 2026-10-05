@@ -1,0 +1,309 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS CloudFormation Template for Telco Customer Churn Data Science Solution.
+  Group 07 infrastructure: encrypted S3 storage, S3-triggered Lambda validation,
+  CloudWatch logging, least-privilege IAM, and AWS Glue Data Catalog database
+  for Athena analytics.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: telecom-churn-analytics
+    Description: Base name for project resources
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+    Description: Environment stage
+
+Resources:
+
+  # ---------------------------------------------------------------------------
+  # 1. S3 storage
+  # One project bucket is used with logical prefixes:
+  #   raw/       - original uploaded customer datasets
+  #   processed/ - cleaned datasets, model outputs, and analytics artifacts
+  # ---------------------------------------------------------------------------
+  TelcoDataBucket:
+    Type: AWS::S3::Bucket
+    DependsOn:
+      - LambdaInvokePermission
+    Properties:
+      BucketName: !Sub "${ProjectName}-team07-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt TelcoValidatorLambda.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: raw/
+                  - Name: suffix
+                    Value: .csv
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Team
+          Value: Group07
+
+  # ---------------------------------------------------------------------------
+  # 2. Least-privilege IAM role for Lambda
+  # ---------------------------------------------------------------------------
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-team07-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: TelcoValidatorS3ReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadRawDatasetObjects
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "${TelcoDataBucket.Arn}/raw/*"
+              - Sid: ListProjectBucket
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt TelcoDataBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - raw/*
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Team
+          Value: Group07
+
+  # ---------------------------------------------------------------------------
+  # 3. Lambda validator
+  # Triggered only when a CSV is uploaded under raw/
+  # ---------------------------------------------------------------------------
+  TelcoValidatorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: TelcoDatasetValidator
+      Description: Validates uploaded Telco Customer Churn CSV files.
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      Timeout: 60
+      MemorySize: 128
+      Environment:
+        Variables:
+          RAW_PREFIX: raw/
+          PROCESSED_PREFIX: processed/
+      Code:
+        ZipFile: |
+          import csv
+          import json
+          import logging
+          import urllib.parse
+
+          import boto3
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          s3_client = boto3.client("s3")
+
+          REQUIRED_COLUMNS = [
+              "customerID", "gender", "SeniorCitizen", "Partner", "Dependents",
+              "tenure", "PhoneService", "MultipleLines", "InternetService",
+              "OnlineSecurity", "OnlineBackup", "DeviceProtection", "TechSupport",
+              "StreamingTV", "StreamingMovies", "Contract", "PaperlessBilling",
+              "PaymentMethod", "MonthlyCharges", "TotalCharges", "Churn"
+          ]
+
+          def lambda_handler(event, context):
+              logger.info("Received event: %s", json.dumps(event))
+
+              for record in event.get("Records", []):
+                  bucket = record["s3"]["bucket"]["name"]
+                  key = urllib.parse.unquote_plus(
+                      record["s3"]["object"]["key"]
+                  )
+
+                  logger.info(
+                      "Validating object s3://%s/%s", bucket, key
+                  )
+
+                  if not key.startswith("raw/") or not key.lower().endswith(".csv"):
+                      logger.warning("Skipped unexpected object: %s", key)
+                      continue
+
+                  try:
+                      response = s3_client.get_object(
+                          Bucket=bucket,
+                          Key=key
+                      )
+
+                      lines = (
+                          response["Body"]
+                          .read()
+                          .decode("utf-8-sig")
+                          .splitlines()
+                      )
+
+                      if not lines:
+                          logger.error("Validation FAILED: empty CSV file.")
+                          continue
+
+                      reader = csv.reader(lines)
+                      header = next(reader, None)
+
+                      if not header:
+                          logger.error(
+                              "Validation FAILED: CSV header is missing."
+                          )
+                          continue
+
+                      missing = [
+                          column
+                          for column in REQUIRED_COLUMNS
+                          if column not in header
+                      ]
+
+                      if missing:
+                          logger.error(
+                              "Validation FAILED. Missing columns: %s",
+                              missing
+                          )
+                          continue
+
+                      row_count = max(len(lines) - 1, 0)
+
+                      logger.info(
+                          "Schema validation PASSED for %s rows. "
+                          "All %s required columns are present.",
+                          row_count,
+                          len(REQUIRED_COLUMNS)
+                      )
+
+                  except Exception:
+                      logger.exception(
+                          "Validation FAILED while processing s3://%s/%s",
+                          bucket,
+                          key
+                      )
+                      raise
+
+              return {
+                  "statusCode": 200,
+                  "body": json.dumps(
+                      "S3 validation event processed successfully."
+                  )
+              }
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Team
+          Value: Group07
+
+  # ---------------------------------------------------------------------------
+  # 4. Allow the project S3 bucket to invoke Lambda
+  # ---------------------------------------------------------------------------
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TelcoValidatorLambda
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-team07-${AWS::AccountId}"
+
+  # ---------------------------------------------------------------------------
+  # 5. Explicit CloudWatch log group for monitoring and troubleshooting
+  # AWSLambdaBasicExecutionRole grants Lambda permission to write logs.
+  # ---------------------------------------------------------------------------
+  TelcoValidatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/TelcoDatasetValidator
+      RetentionInDays: 7
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Team
+          Value: Group07
+
+  # ---------------------------------------------------------------------------
+  # 6. Glue Data Catalog database used by Athena
+  # The processed dataset is stored under the S3 processed/ prefix.
+  # The table/crawler can be created from the processed schema used in the
+  # project's SQL/analytics workflow.
+  # ---------------------------------------------------------------------------
+  TelcoGlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: telco_churn_db
+        Description: >
+          Data Catalog database for Group 07 Telco Customer Churn analytics.
+
+Outputs:
+
+  S3BucketName:
+    Description: Project S3 bucket containing raw/ and processed/ prefixes
+    Value: !Ref TelcoDataBucket
+
+  RawDataS3Uri:
+    Description: S3 location for original uploaded customer datasets
+    Value: !Sub "s3://${TelcoDataBucket}/raw/"
+
+  ProcessedDataS3Uri:
+    Description: S3 location for processed datasets and model outputs
+    Value: !Sub "s3://${TelcoDataBucket}/processed/"
+
+  LambdaFunctionName:
+    Description: Dataset validation Lambda function
+    Value: !Ref TelcoValidatorLambda
+
+  LambdaFunctionArn:
+    Description: Dataset validation Lambda function ARN
+    Value: !GetAtt TelcoValidatorLambda.Arn
+
+  CloudWatchLogGroup:
+    Description: CloudWatch log group used by the validation Lambda
+    Value: !Ref TelcoValidatorLogGroup
+
+  GlueDatabaseName:
+    Description: AWS Glue Data Catalog database used for Athena analytics
+    Value: !Ref TelcoGlueDatabase
