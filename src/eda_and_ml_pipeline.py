@@ -1,13 +1,13 @@
 """
-Telco Customer Churn - Data Science & ML Pipeline
+Telco Customer Churn - Data Science & ML Pipeline (XGBoost & SMOTE Models)
 AWS Project Group 07
 
 This script performs:
 1. Data Loading & Data Quality Validation
 2. Handling Data Quality Issues (missing TotalCharges values)
 3. Exploratory Data Analysis & Visualizations (4 key figures)
-4. Data Preprocessing & Feature Engineering
-5. Machine Learning Modeling (Logistic Regression & Random Forest)
+4. Data Preprocessing & Class Balancing (SMOTE & scale_pos_weight)
+5. Machine Learning Modeling (SMOTE Logistic Regression, SMOTE Random Forest & Balanced XGBoost)
 6. Model Evaluation, Comparison & Feature Importance Analysis
 7. Exporting Processed Dataset for AWS S3 / Athena SQL Analysis
 """
@@ -27,17 +27,19 @@ from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     roc_auc_score, classification_report, confusion_matrix, roc_curve
 )
+from imblearn.over_sampling import SMOTE
+import xgboost as xgb
 
 # Set style for visualizations
 sns.set_theme(style="whitegrid")
 plt.rcParams['font.sans-serif'] = 'DejaVu Sans'
 
 # Create output directories
-OS_OUTPUT_DIR = os.path.join("output", "visualizations")
+OS_OUTPUT_DIR = os.path.join("../output", "visualizations")
 os.makedirs(OS_OUTPUT_DIR, exist_ok=True)
 os.makedirs("data", exist_ok=True)
 
-def load_and_validate_data(filepath="./data/Telco_Customer_Churn.csv"):
+def load_and_validate_data(filepath="../data/Telco_Customer_Churn.csv"):
     print("=" * 60)
     print("STEP 1: DATA LOADING & QUALITY VALIDATION")
     print("=" * 60)
@@ -50,11 +52,9 @@ def load_and_validate_data(filepath="./data/Telco_Customer_Churn.csv"):
     print(f"Data Quality Issue Identified: Found {blank_total_charges} rows where 'TotalCharges' contains blank spaces ' '.")
     
     # Fix missing values in TotalCharges
-    df['TotalCharges'] = df['TotalCharges'].replace(' ', np.nan)
-    df['TotalCharges'] = df['TotalCharges'].astype(float)
+    df['TotalCharges'] = df['TotalCharges'].replace(' ', np.nan).astype(float)
     
-    # Impute missing TotalCharges with median (or tenure * MonthlyCharges)
-    # Note: Rows with blank TotalCharges have tenure = 0. So 0.0 is accurate.
+    # Impute missing TotalCharges with 0.0 for zero tenure rows
     df['TotalCharges'] = df['TotalCharges'].fillna(0.0)
     print("Fixed 'TotalCharges': Converted blank strings to float and imputed 0.0 for zero tenure rows.")
     
@@ -132,14 +132,14 @@ def generate_visualizations(df):
 
 def preprocess_and_train(df):
     print("\n" + "=" * 60)
-    print("STEP 3: PREPROCESSING, MODEL TRAINING & EVALUATION")
+    print("STEP 3: PREPROCESSING, BALANCING & MODEL TRAINING")
     print("=" * 60)
     
     # Copy dataset for ML
     data = df.copy()
     
     # Save clean dataset for S3 / Athena SQL analysis
-    clean_csv_path = os.path.join("data", "processed_telco_churn.csv")
+    clean_csv_path = os.path.join("../data", "processed_telco_churn.csv")
     data.to_csv(clean_csv_path, index=False)
     print(f"Saved Clean Processed Dataset -> {clean_csv_path}")
     
@@ -167,37 +167,57 @@ def preprocess_and_train(df):
     X_train_proc = preprocessor.fit_transform(X_train)
     X_test_proc = preprocessor.transform(X_test)
     
+    # Apply SMOTE to training data only
+    smote = SMOTE(random_state=42)
+    X_train_smote, y_train_smote = smote.fit_resample(X_train_proc, y_train)
+    print(f"Original Training Shape: {X_train_proc.shape}, Churn counts: {y_train.value_counts().to_dict()}")
+    print(f"SMOTE Resampled Training Shape: {X_train_smote.shape}, Churn counts: {pd.Series(y_train_smote).value_counts().to_dict()}")
+    
     # Get feature names post one-hot encoding
     encoded_cat_names = preprocessor.named_transformers_['cat'].get_feature_names_out(cat_cols)
     all_feature_names = num_cols + list(encoded_cat_names)
     
-    # Model 1: Logistic Regression
+    # Model 1: SMOTE + Logistic Regression
     lr_model = LogisticRegression(max_iter=1000, random_state=42)
-    lr_model.fit(X_train_proc, y_train)
+    lr_model.fit(X_train_smote, y_train_smote)
     y_pred_lr = lr_model.predict(X_test_proc)
     y_prob_lr = lr_model.predict_proba(X_test_proc)[:, 1]
     
-    # Model 2: Random Forest Classifier
+    # Model 2: SMOTE + Random Forest Classifier (Primary Champion Model)
     rf_model = RandomForestClassifier(n_estimators=100, max_depth=8, random_state=42)
-    rf_model.fit(X_train_proc, y_train)
+    rf_model.fit(X_train_smote, y_train_smote)
     y_pred_rf = rf_model.predict(X_test_proc)
     y_prob_rf = rf_model.predict_proba(X_test_proc)[:, 1]
     
+    # Model 3: Balanced XGBoost Classifier (scale_pos_weight = 2.77)
+    scale_pos = (y_train == 0).sum() / (y_train == 1).sum()
+    xgb_model = xgb.XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.05, scale_pos_weight=scale_pos, random_state=42)
+    xgb_model.fit(X_train_proc, y_train)
+    y_pred_xgb = xgb_model.predict(X_test_proc)
+    y_prob_xgb = xgb_model.predict_proba(X_test_proc)[:, 1]
+
     # Metrics Calculation
     results = {
-        'Logistic Regression': {
+        'SMOTE Logistic Regression': {
             'Accuracy': accuracy_score(y_test, y_pred_lr),
             'Precision': precision_score(y_test, y_pred_lr),
             'Recall': recall_score(y_test, y_pred_lr),
             'F1-Score': f1_score(y_test, y_pred_lr),
             'ROC-AUC': roc_auc_score(y_test, y_prob_lr)
         },
-        'Random Forest': {
+        'SMOTE Random Forest (Primary)': {
             'Accuracy': accuracy_score(y_test, y_pred_rf),
             'Precision': precision_score(y_test, y_pred_rf),
             'Recall': recall_score(y_test, y_pred_rf),
             'F1-Score': f1_score(y_test, y_pred_rf),
             'ROC-AUC': roc_auc_score(y_test, y_prob_rf)
+        },
+        'Balanced XGBoost (High Recall)': {
+            'Accuracy': accuracy_score(y_test, y_pred_xgb),
+            'Precision': precision_score(y_test, y_pred_xgb),
+            'Recall': recall_score(y_test, y_pred_xgb),
+            'F1-Score': f1_score(y_test, y_pred_xgb),
+            'ROC-AUC': roc_auc_score(y_test, y_prob_xgb)
         }
     }
     
@@ -215,7 +235,7 @@ def preprocess_and_train(df):
     # Feature Importance for Random Forest
     rf_importances = pd.Series(rf_model.feature_importances_, index=all_feature_names).sort_values(ascending=False)
     print("\n" + "-" * 50)
-    print("TOP 10 MOST IMPORTANT FEATURES (Random Forest):")
+    print("TOP 10 MOST IMPORTANT FEATURES (SMOTE Random Forest):")
     print("-" * 50)
     print(rf_importances.head(10).to_string())
     

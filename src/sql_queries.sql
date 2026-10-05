@@ -41,12 +41,12 @@ TBLPROPERTIES ('skip.header.line.count'='1');
 -- QUERY 1: Overall Customer Churn Summary & Revenue Impact
 -- Purpose: Calculate overall customer churn count, churn rate %, and lost monthly revenue.
 -- -----------------------------------------------------------------------------
-SELECT 
-    COUNT(*) AS total_customers,
-    SUM(CASE WHEN Churn = 'Yes' THEN 1 ELSE 0 END) AS churned_customers,
-    ROUND(100.0 * SUM(CASE WHEN Churn = 'Yes' THEN 1 ELSE 0 END) / COUNT(*), 2) AS churn_rate_percentage,
-    ROUND(SUM(CASE WHEN Churn = 'Yes' THEN MonthlyCharges ELSE 0 END), 2) AS monthly_revenue_lost
-FROM telco_churn_db.processed_churn;
+    SELECT 
+        COUNT(*) AS total_customers,
+        SUM(CASE WHEN Churn = 'Yes' THEN 1 ELSE 0 END) AS churned_customers,
+        ROUND(100.0 * SUM(CASE WHEN Churn = 'Yes' THEN 1 ELSE 0 END) / COUNT(*), 2) AS churn_rate_percentage,
+        ROUND(SUM(CASE WHEN Churn = 'Yes' THEN MonthlyCharges ELSE 0 END), 2) AS monthly_revenue_lost
+    FROM telco_churn_db.processed_churn;
 
 
 -- -----------------------------------------------------------------------------

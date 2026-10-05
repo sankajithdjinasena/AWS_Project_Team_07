@@ -11,7 +11,7 @@ This repository contains the complete cloud-based Data Science and Machine Learn
 ## 📁 Repository Directory Structure
 
 ```text
-AWS_Project_Team_05/
+AWS_Project_Team_07/
 ├── AWS Assignment.pdf                 # Original Assignment Requirements PDF
 ├── README.md                          # GitHub Repository Documentation
 ├── data/
