@@ -57,6 +57,55 @@ export default function BatchPredictionTab({ modelType }) {
     }
   };
 
+  const handleRunDemoBatch = async () => {
+    setIsLoading(true);
+    setErrorMsg('');
+    try {
+      const csvRes = await fetch('/api/sample-csv');
+      if (!csvRes.ok) throw new Error('Could not load sample CSV');
+      const blob = await csvRes.blob();
+      const demoFile = new File([blob], 'telco_sample_batch.csv', { type: 'text/csv' });
+      setFile(demoFile);
+
+      const formData = new FormData();
+      formData.append('file', demoFile);
+      const res = await fetch(`/api/batch-predict?model_type=${modelType}`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!res.ok) throw new Error('Batch inference failed');
+      const data = await res.json();
+      setBatchResult(data);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Failed to process demo batch. Please verify FastAPI backend is active.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (!batchResult?.predictions) return;
+    const headers = ['CustomerID', 'Contract', 'Tenure', 'MonthlyCharges', 'Prediction', 'ChurnProbability', 'RiskLevel'];
+    const rows = batchResult.predictions.map(p => [
+      p.customerID,
+      `"${p.contract}"`,
+      p.tenure,
+      p.monthly_charges,
+      p.churn_prediction,
+      p.churn_probability,
+      p.risk_level
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `churn_batch_predictions_${modelType}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const filteredPredictions = batchResult?.predictions?.filter(p => {
     const matchesSearch = p.customerID?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           p.contract?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -111,8 +160,28 @@ export default function BatchPredictionTab({ modelType }) {
               className="btn btn-primary"
               style={{ fontSize: '0.8rem' }}
             >
-              {isLoading ? 'Processing Pipeline...' : <><Zap size={16} /> Process Batch</>}
+              {isLoading ? 'Processing Pipeline...' : <><Zap size={16} /> Process Uploaded File</>}
             </button>
+
+            <button
+              onClick={handleRunDemoBatch}
+              disabled={isLoading}
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8rem', border: '1px solid rgba(59, 130, 246, 0.4)' }}
+              title="Immediately evaluate 20 records from the Telco dataset"
+            >
+              <Zap size={15} color="#38bdf8" /> 1-Click Demo Batch (20 Rows)
+            </button>
+
+            <a
+              href="/api/sample-csv"
+              download="telco_sample_batch.csv"
+              className="btn btn-outline"
+              style={{ fontSize: '0.8rem' }}
+              title="Download sample Telco CSV for testing"
+            >
+              <Download size={15} /> Sample CSV
+            </a>
           </div>
 
           {errorMsg && (
@@ -182,7 +251,7 @@ export default function BatchPredictionTab({ modelType }) {
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '0.35rem' }}>
+              <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                 {['ALL', 'HIGH', 'MEDIUM', 'LOW'].map(level => (
                   <button
                     key={level}
@@ -193,6 +262,14 @@ export default function BatchPredictionTab({ modelType }) {
                     {level}
                   </button>
                 ))}
+                <button
+                  onClick={handleExportCSV}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', marginLeft: '0.5rem' }}
+                  title="Download evaluated results as a CSV spreadsheet"
+                >
+                  <Download size={13} /> Export CSV
+                </button>
               </div>
             </div>
 

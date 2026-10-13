@@ -27,6 +27,7 @@ Resources:
   # One project bucket is used with logical prefixes:
   #   raw/       - original uploaded customer datasets
   #   processed/ - cleaned datasets, model outputs, and analytics artifacts
+  #   models/    - serialized machine learning pipeline (churn_model.pkl) for FastAPI inference
   # ---------------------------------------------------------------------------
   TelcoDataBucket:
     Type: AWS::S3::Bucket
@@ -291,6 +292,10 @@ Outputs:
   ProcessedDataS3Uri:
     Description: S3 location for processed datasets and model outputs
     Value: !Sub "s3://${TelcoDataBucket}/processed/"
+
+  ModelRegistryS3Uri:
+    Description: S3 location for serialized ML model pipeline (churn_model.pkl) for FastAPI inference
+    Value: !Sub "s3://${TelcoDataBucket}/models/"
 
   LambdaFunctionName:
     Description: Dataset validation Lambda function

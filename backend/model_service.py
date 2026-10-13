@@ -1,41 +1,92 @@
 """
 Model Service for Telco Churn Prediction
-Loads serialized models and preprocessor, runs inference, and generates actionable retention advice.
+Loads serialized pickle models and preprocessor, synchronizes with AWS S3,
+runs inference, and generates actionable retention advice.
 AWS Project Team 07
 """
 
 import os
 import json
 import joblib
+import pickle
 import pandas as pd
 import numpy as np
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+try:
+    from backend.s3_service import s3_service
+except ImportError:
+    from s3_service import s3_service
 
 class ModelService:
     def __init__(self):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         self.model_dir = os.path.join(base_dir, "saved_models")
+        self.pickle_path = os.path.join(self.model_dir, "churn_model.pkl")
+        self.model_source = "Local Pickle Cache (churn_model.pkl)"
+        self.s3_synced = False
         
-        # Load artifacts
+        # 1. Load artifacts
         print("Loading preprocessor and models...")
         self.preprocessor = joblib.load(os.path.join(self.model_dir, "preprocessor.joblib"))
         self.rf_model = joblib.load(os.path.join(self.model_dir, "rf_model.joblib"))
         self.xgb_model = joblib.load(os.path.join(self.model_dir, "xgb_model.joblib"))
         self.lr_model = joblib.load(os.path.join(self.model_dir, "lr_model.joblib"))
         
+        # 2. Load Pickle Pipeline if available
+        self.pickle_pipeline = None
+        if os.path.exists(self.pickle_path):
+            try:
+                with open(self.pickle_path, "rb") as f:
+                    self.pickle_pipeline = pickle.load(f)
+                print(f"Loaded unified pickle model from: {self.pickle_path}")
+            except Exception as e:
+                print(f"Warning loading pickle pipeline: {e}")
+        
+        # 3. Load Metadata
         with open(os.path.join(self.model_dir, "metadata.json"), "r", encoding="utf-8") as f:
             self.metadata = json.load(f)
             
         print("ModelService initialized successfully.")
 
+    def sync_from_s3(self, bucket: Optional[str] = None, key: str = "models/churn_model.pkl") -> Dict[str, Any]:
+        """Attempts to download the newest pickle file from AWS S3 and reload it into memory."""
+        res = s3_service.download_model(local_path=self.pickle_path, key=key, bucket=bucket)
+        if res.get("success"):
+            try:
+                with open(self.pickle_path, "rb") as f:
+                    self.pickle_pipeline = pickle.load(f)
+                self.model_source = f"AWS S3 ({res['s3_uri']})"
+                self.s3_synced = True
+                return {
+                    "success": True,
+                    "message": f"Successfully synced and reloaded pickle model from {res['s3_uri']}",
+                    "model_source": self.model_source
+                }
+            except Exception as e:
+                return {"success": False, "message": f"Error deserializing model from S3: {str(e)}"}
+        return res
+
     def get_metadata(self) -> Dict[str, Any]:
-        return self.metadata
+        meta = dict(self.metadata)
+        s3_stat = s3_service.get_status()
+        meta["model_storage"] = {
+            "pickle_path": self.pickle_path,
+            "pickle_size_bytes": os.path.getsize(self.pickle_path) if os.path.exists(self.pickle_path) else 0,
+            "pickle_size_mb": round(os.path.getsize(self.pickle_path) / (1024 * 1024), 2) if os.path.exists(self.pickle_path) else 0,
+            "model_source": self.model_source,
+            "s3_bucket": s3_service.bucket_name,
+            "s3_key": "models/churn_model.pkl",
+            "s3_uri": f"s3://{s3_service.bucket_name}/models/churn_model.pkl",
+            "s3_connected": s3_stat.get("connected", False),
+            "s3_exists": s3_stat.get("exists_in_s3", False),
+            "s3_details": s3_stat
+        }
+        return meta
 
     def predict_single(self, customer_data: Dict[str, Any], model_type: str = "random_forest") -> Dict[str, Any]:
         """
         Run inference for a single customer payload.
         """
-        # Ensure numerical values are correctly cast
         processed_input = dict(customer_data)
         processed_input["tenure"] = int(processed_input.get("tenure", 0))
         processed_input["MonthlyCharges"] = float(processed_input.get("MonthlyCharges", 0.0))
@@ -52,21 +103,28 @@ class ModelService:
         # Create DataFrame
         input_df = pd.DataFrame([processed_input])
         
-        # Transform features
-        X_proc = self.preprocessor.transform(input_df)
-        
-        # Select model
-        selected_model = self.rf_model
-        model_name = "SMOTE Random Forest"
-        if model_type == "xgboost":
-            selected_model = self.xgb_model
-            model_name = "Balanced XGBoost"
+        # Inference using S3 Pickle Pipeline or FastAPI Native Models
+        if model_type in ["s3_pickle", "pickle_pipeline"]:
+            if self.pickle_pipeline is not None:
+                probability = float(self.pickle_pipeline.predict_proba(input_df)[0, 1])
+                model_name = "AWS S3 Pickle Model (churn_model.pkl)"
+            else:
+                X_proc = self.preprocessor.transform(input_df)
+                probability = float(self.rf_model.predict_proba(X_proc)[0, 1])
+                model_name = "FastAPI Local Random Forest (Fallback)"
+        elif model_type == "xgboost":
+            X_proc = self.preprocessor.transform(input_df)
+            probability = float(self.xgb_model.predict_proba(X_proc)[0, 1])
+            model_name = "FastAPI Balanced XGBoost"
         elif model_type == "logistic_regression":
-            selected_model = self.lr_model
-            model_name = "SMOTE Logistic Regression"
-            
-        # Inference
-        probability = float(selected_model.predict_proba(X_proc)[0, 1])
+            X_proc = self.preprocessor.transform(input_df)
+            probability = float(self.lr_model.predict_proba(X_proc)[0, 1])
+            model_name = "FastAPI SMOTE Logistic Regression"
+        else:  # "random_forest"
+            X_proc = self.preprocessor.transform(input_df)
+            probability = float(self.rf_model.predict_proba(X_proc)[0, 1])
+            model_name = "FastAPI SMOTE Random Forest"
+
         prediction = int(probability >= 0.5)
         
         # Risk categorization
@@ -80,10 +138,7 @@ class ModelService:
             risk_level = "Low"
             risk_color = "green"
 
-        # Generate intelligent business recommendations
         recommendations = self._generate_recommendations(processed_input, probability, risk_level)
-        
-        # Key risk factors
         risk_factors = self._identify_risk_factors(processed_input)
 
         return {
@@ -93,6 +148,7 @@ class ModelService:
             "risk_level": risk_level,
             "risk_color": risk_color,
             "model_used": model_name,
+            "model_source": self.model_source,
             "risk_factors": risk_factors,
             "recommendations": recommendations,
             "customer_summary": {
@@ -133,8 +189,6 @@ class ModelService:
 
     def _generate_recommendations(self, data: Dict[str, Any], prob: float, risk_level: str) -> List[Dict[str, str]]:
         recs = []
-        
-        # 1. Contract Recommendation
         if data.get("Contract") == "Month-to-month":
             recs.append({
                 "title": "Incentivize Annual Commitment",
@@ -142,7 +196,6 @@ class ModelService:
                 "expected_impact": "Reduces churn probability from ~42% to under 11%."
             })
             
-        # 2. Tech Support & Internet
         if data.get("InternetService") == "Fiber optic" and data.get("TechSupport") == "No":
             recs.append({
                 "title": "Provide Proactive Tech Support Onboarding",
@@ -150,7 +203,6 @@ class ModelService:
                 "expected_impact": "Cuts Fiber Optic churn vulnerability by approximately 30%."
             })
             
-        # 3. Early Tenure Retention
         if data.get("tenure", 0) < 12:
             recs.append({
                 "title": "Early Lifecycle Success Program",
@@ -158,7 +210,6 @@ class ModelService:
                 "expected_impact": "Helps customer surpass the critical first-year churn spike."
             })
             
-        # 4. Payment Method
         if data.get("PaymentMethod") == "Electronic check":
             recs.append({
                 "title": "Migrate to Automated Payment",
@@ -166,7 +217,6 @@ class ModelService:
                 "expected_impact": "Lowers payment friction and reduces involuntary/habitual churn."
             })
             
-        # 5. Security & Backup Bundling
         if data.get("OnlineSecurity") == "No" and data.get("InternetService") != "No":
             recs.append({
                 "title": "Add-On Value Security Protection",
@@ -174,7 +224,6 @@ class ModelService:
                 "expected_impact": "Increases customer switching costs and satisfaction."
             })
             
-        # Default recommendation if customer is already healthy
         if risk_level == "Low" and not recs:
             recs.append({
                 "title": "Maintain Loyalty & Cross-Sell",

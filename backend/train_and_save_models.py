@@ -154,10 +154,22 @@ def train_and_export():
     joblib.dump(xgb_model, os.path.join(model_dir, "xgb_model.joblib"))
     joblib.dump(lr_model, os.path.join(model_dir, "lr_model.joblib"))
     
+    # Save unified S3 Pickle pipeline with EXACT same preprocessor and rf_model
+    from sklearn.pipeline import Pipeline
+    import pickle
+    unified_pipeline = Pipeline([
+        ('preprocessor', preprocessor),
+        ('classifier', rf_model)
+    ])
+    pickle_path = os.path.join(model_dir, "churn_model.pkl")
+    with open(pickle_path, "wb") as f:
+        pickle.dump(unified_pipeline, f, protocol=pickle.HIGHEST_PROTOCOL)
+    print(f"Saved unified churn_model.pkl -> {pickle_path} (100% aligned with FastAPI models)")
+
     with open(os.path.join(model_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
         
-    print("All models and metadata successfully exported!")
+    print("All models, pickle pipeline, and metadata successfully exported!")
 
 if __name__ == "__main__":
     train_and_export()

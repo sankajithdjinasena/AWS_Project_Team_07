@@ -12,7 +12,10 @@ import {
   User, 
   Wifi, 
   CreditCard,
-  ChevronRight
+  ChevronRight,
+  Cloud,
+  UploadCloud,
+  RefreshCw
 } from 'lucide-react';
 
 export default function PredictionTab({ 
@@ -23,9 +26,50 @@ export default function PredictionTab({
   onPredict, 
   predictionResult, 
   isLoading, 
-  modelType 
+  modelType,
+  setModelType,
+  modelStorage
 }) {
   const [autoComputeTotal, setAutoComputeTotal] = useState(true);
+  const [s3ActionLoading, setS3ActionLoading] = useState(false);
+  const [s3Feedback, setS3Feedback] = useState(null);
+
+  const handleUploadToS3 = async () => {
+    setS3ActionLoading(true);
+    setS3Feedback(null);
+    try {
+      const res = await fetch('/api/s3/upload', { method: 'POST' });
+      const data = await res.json();
+      setS3Feedback({
+        type: data.success ? 'success' : 'info',
+        msg: data.message
+      });
+    } catch (err) {
+      setS3Feedback({ type: 'error', msg: 'Failed to trigger S3 upload request.' });
+    } finally {
+      setS3ActionLoading(false);
+    }
+  };
+
+  const handleSyncFromS3 = async () => {
+    setS3ActionLoading(true);
+    setS3Feedback(null);
+    try {
+      const res = await fetch('/api/s3/sync', { method: 'POST' });
+      const data = await res.json();
+      setS3Feedback({
+        type: data.success ? 'success' : 'info',
+        msg: data.message
+      });
+      if (data.success) {
+        onPredict(); // Re-run prediction with synced model
+      }
+    } catch (err) {
+      setS3Feedback({ type: 'error', msg: 'Failed to sync model from S3.' });
+    } finally {
+      setS3ActionLoading(false);
+    }
+  };
 
   // Sync TotalCharges whenever tenure or MonthlyCharges change if autoComputeTotal is enabled
   useEffect(() => {
@@ -75,7 +119,7 @@ export default function PredictionTab({
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem 1rem' }}>
       {/* Preset Profiles Bar */}
-      <div className="glass-panel" style={{ padding: '1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+      <div className="glass-panel" style={{ padding: '1rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Sparkles size={18} color="#3b82f6" />
           <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -112,6 +156,100 @@ export default function PredictionTab({
           </button>
         </div>
       </div>
+
+      {/* Inference Engine Switcher: FastAPI Local vs AWS S3 Cloud */}
+      <div className="glass-panel" style={{
+        padding: '1rem 1.25rem',
+        marginBottom: '1.5rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '1rem',
+        borderLeft: `4px solid ${modelType === 's3_pickle' ? '#ff9900' : '#3b82f6'}`
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+          <div style={{
+            background: modelType === 's3_pickle' ? 'rgba(255, 153, 0, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+            padding: '0.6rem',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            {modelType === 's3_pickle' ? <Cloud size={22} color="#ff9900" /> : <Zap size={22} color="#3b82f6" />}
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fff' }}>
+                {modelType === 's3_pickle' ? '☁️ AWS S3 Cloud Pickle Model' : '⚡ FastAPI Engine'}
+              </span>
+              <span className={`badge ${modelType === 's3_pickle' ? 'badge-aws' : 'badge-success'}`} style={{ fontSize: '0.68rem' }}>
+                {modelType === 's3_pickle' ? 'AWS S3 Mode' : 'FastAPI Mode'}
+              </span>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              {modelType === 's3_pickle' 
+                ? `Evaluating with s3://${modelStorage?.s3_bucket || 'telecom-churn-analytics-team07'}/models/churn_model.pkl`
+                : 'Evaluating with FastAPI models (SMOTE Random Forest, Balanced XGBoost, Logistic Regression)'}
+            </p>
+          </div>
+        </div>
+
+        {/* Engine Switcher Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setModelType('random_forest')}
+            className={`btn ${modelType !== 's3_pickle' ? 'btn-primary' : 'btn-outline'}`}
+            style={{ fontSize: '0.78rem', padding: '0.45rem 0.9rem' }}
+          >
+            <Zap size={14} /> Switch ON FastAPI
+          </button>
+          <button
+            onClick={() => setModelType('s3_pickle')}
+            className={`btn ${modelType === 's3_pickle' ? 'btn-primary' : 'btn-outline'}`}
+            style={{
+              fontSize: '0.78rem',
+              padding: '0.45rem 0.9rem',
+              background: modelType === 's3_pickle' ? 'linear-gradient(135deg, #ff9900 0%, #ea580c 100%)' : 'transparent',
+              color: modelType === 's3_pickle' ? '#fff' : 'var(--text-secondary)',
+              border: modelType === 's3_pickle' ? 'none' : '1px solid var(--border-color)'
+            }}
+          >
+            <Cloud size={14} /> Switch to AWS S3
+          </button>
+
+          {modelType === 's3_pickle' && (
+            <button
+              onClick={handleSyncFromS3}
+              disabled={s3ActionLoading}
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', padding: '0.45rem 0.75rem' }}
+              title="Download and reload latest model from S3"
+            >
+              <RefreshCw size={14} /> Sync S3
+            </button>
+          )}
+        </div>
+      </div>
+
+      {s3Feedback && (
+        <div style={{
+          padding: '0.75rem 1rem',
+          borderRadius: '8px',
+          marginBottom: '1rem',
+          fontSize: '0.8rem',
+          background: s3Feedback.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+          border: `1px solid ${s3Feedback.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+          color: s3Feedback.type === 'success' ? '#a7f3d0' : '#bfdbfe',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <span>{s3Feedback.msg}</span>
+          <button onClick={() => setS3Feedback(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+        </div>
+      )}
 
       {/* Main Grid: Form on Left, Prediction Output on Right */}
       <div style={{

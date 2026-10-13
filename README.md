@@ -40,7 +40,7 @@ The solution seamlessly integrates:
 
 ### 2.1 Architecture Diagram
 
-![AWS Architecture Diagram](Images/Architecture.jpg)
+![AWS Customer Churn Prediction Architecture](Images/AWS%20Customer%20Churn%20Prediction%20Architecture.png)
 
 ```text
   [ Raw CSV Upload ] 
@@ -52,15 +52,19 @@ The solution seamlessly integrates:
                                                                                                ▼
                                                                                       [ AWS CloudWatch Logs ]
 
-   [ Data Science Pipeline (eda_and_ml_pipeline.ipynb) ]
+   [ Data Science Pipeline (eda_and_ml_pipeline.py) ]
          │
          ├─► Data Cleaning & Missing Value Imputation (TotalCharges)
-         ├─► 5 Exploratory Data Analysis (EDA) Charts
-         ├─► Categorical Encoding & Feature Scaling
-         └─► 3 ML Models (SMOTE Logistic Regression, SMOTE Random Forest, Focal Loss XGBoost)
+         ├─► SMOTE Class Balancing & Categorical Encoding
+         ├─► 3 ML Classifiers (SMOTE Random Forest, Balanced XGBoost, Logistic Regression)
+         └─► Unified Model Serialization (churn_model.pkl)
          │
-         ▼
-   [ S3 Processed Bucket: s3://telecom-churn-analytics-team07/processed/ ] ──► [ AWS Glue Data Catalog ] ──► [ AWS Athena SQL Queries ]
+         ├───► [ S3 Processed Bucket: s3://.../processed/ ] ──► [ AWS Glue ] ──► [ AWS Athena SQL Queries ]
+         │
+         └───► [ S3 Model Registry: s3://.../models/churn_model.pkl ]
+                     │
+                     ▼
+               [ FastAPI REST API (Port 8000) ] ◄──HTTP/JSON──► [ React JSX Frontend (Studio Dashboard) ]
 ```
 
 ### 2.2 AWS Service Selection Rationale

@@ -62,6 +62,29 @@ def health_check():
         "version": "1.0.0"
     }
 
+@app.get("/api/s3/status")
+def get_s3_status(bucket: Optional[str] = None):
+    """Returns AWS S3 connection state, target bucket, and churn_model.pkl availability."""
+    try:
+        from backend.s3_service import s3_service
+    except ImportError:
+        from s3_service import s3_service
+    return s3_service.get_status(bucket=bucket)
+
+@app.post("/api/s3/upload")
+def upload_model_to_s3(bucket: Optional[str] = None):
+    """Uploads the local churn_model.pkl to the configured AWS S3 bucket."""
+    try:
+        from backend.s3_service import s3_service
+    except ImportError:
+        from s3_service import s3_service
+    return s3_service.upload_model(local_path=model_service.pickle_path, bucket=bucket)
+
+@app.post("/api/s3/sync")
+def sync_model_from_s3(bucket: Optional[str] = None):
+    """Downloads and reloads churn_model.pkl from the AWS S3 bucket."""
+    return model_service.sync_from_s3(bucket=bucket)
+
 @app.get("/api/model-info")
 def get_model_info():
     """Returns training metadata, feature columns, and categorical options."""
@@ -203,7 +226,7 @@ def get_sample_profiles():
 @app.post("/api/predict")
 def predict_churn(
     payload: CustomerPayload,
-    model_type: str = Query("random_forest", enum=["random_forest", "xgboost", "logistic_regression"])
+    model_type: str = Query("random_forest", enum=["random_forest", "xgboost", "logistic_regression", "s3_pickle"])
 ):
     """
     Predicts churn status and probability for a customer profile.
@@ -214,10 +237,25 @@ def predict_churn(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
 
+@app.get("/api/sample-csv")
+def get_sample_csv():
+    """Returns sample 20 rows of Telco Customer CSV for 1-click batch testing."""
+    data_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "Telco_Customer_Churn.csv"))
+    if os.path.exists(data_path):
+        df = pd.read_csv(data_path)
+        sample_csv = df.head(20).to_csv(index=False)
+        from fastapi.responses import Response
+        return Response(
+            content=sample_csv,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=telco_sample_batch.csv"}
+        )
+    raise HTTPException(status_code=404, detail="Dataset not found")
+
 @app.post("/api/batch-predict")
 async def batch_predict(
     file: UploadFile = File(...),
-    model_type: str = Query("random_forest", enum=["random_forest", "xgboost", "logistic_regression"])
+    model_type: str = Query("random_forest", enum=["random_forest", "xgboost", "logistic_regression", "s3_pickle"])
 ):
     """
     Upload a CSV file containing customer rows to get batch churn predictions.

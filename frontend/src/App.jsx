@@ -11,6 +11,7 @@ export default function App() {
   const [apiStatus, setApiStatus] = useState('checking');
   const [sampleProfiles, setSampleProfiles] = useState([]);
   const [metricsData, setMetricsData] = useState(null);
+  const [modelStorage, setModelStorage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [predictionResult, setPredictionResult] = useState(null);
 
@@ -62,7 +63,7 @@ export default function App() {
         console.warn('Could not fetch sample profiles:', err);
       }
 
-      // Fetch Metrics
+      // Fetch Metrics & Model Info
       try {
         const metricsRes = await fetch('/api/metrics');
         if (metricsRes.ok) {
@@ -71,6 +72,18 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Could not fetch metrics:', err);
+      }
+
+      try {
+        const infoRes = await fetch('/api/model-info');
+        if (infoRes.ok) {
+          const info = await infoRes.json();
+          if (info.model_storage) {
+            setModelStorage(info.model_storage);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch model storage info:', err);
       }
     };
 
@@ -166,6 +179,8 @@ export default function App() {
             predictionResult={predictionResult}
             isLoading={isLoading}
             modelType={modelType}
+            setModelType={setModelType}
+            modelStorage={modelStorage}
           />
         )}
 

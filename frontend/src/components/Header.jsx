@@ -90,11 +90,38 @@ export default function Header({ activeTab, setActiveTab, apiStatus, modelType, 
           </button>
         </nav>
 
-        {/* Model Switcher & Status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        {/* Engine Switcher (FastAPI vs S3 Pickle) & Status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           {activeTab === 'predict' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Model:</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(15, 23, 42, 0.7)', padding: '0.2rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+              <button
+                onClick={() => setModelType('random_forest')}
+                className={`btn ${modelType !== 's3_pickle' ? 'btn-primary' : 'btn-outline'}`}
+                style={{ padding: '0.35rem 0.7rem', fontSize: '0.72rem', border: 'none', borderRadius: '7px' }}
+                title="Switch on FastAPI native models"
+              >
+                <Activity size={13} /> ⚡ FastAPI Engine
+              </button>
+              <button
+                onClick={() => setModelType('s3_pickle')}
+                className={`btn ${modelType === 's3_pickle' ? 'btn-primary' : 'btn-outline'}`}
+                style={{
+                  padding: '0.35rem 0.7rem',
+                  fontSize: '0.72rem',
+                  border: 'none',
+                  borderRadius: '7px',
+                  background: modelType === 's3_pickle' ? 'linear-gradient(135deg, #ff9900 0%, #ea580c 100%)' : 'transparent',
+                  color: modelType === 's3_pickle' ? '#fff' : 'var(--text-secondary)'
+                }}
+                title="Switch to AWS S3 Pickle Pipeline (churn_model.pkl)"
+              >
+                <Cloud size={13} /> ☁️ AWS S3 Pickle
+              </button>
+            </div>
+          )}
+
+          {activeTab === 'predict' && modelType !== 's3_pickle' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <select 
                 value={modelType} 
                 onChange={(e) => setModelType(e.target.value)}
@@ -114,6 +141,22 @@ export default function Header({ activeTab, setActiveTab, apiStatus, modelType, 
             </div>
           )}
 
+          {/* S3 Storage Status */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.375rem',
+            padding: '0.35rem 0.75rem',
+            borderRadius: '9999px',
+            background: 'rgba(255, 153, 0, 0.12)',
+            border: '1px solid rgba(255, 153, 0, 0.35)',
+            fontSize: '0.75rem',
+            color: '#fed7aa'
+          }} title="AWS S3 Model Pickle Storage">
+            <Cloud size={13} color="#ff9900" />
+            <span style={{ fontWeight: 600 }}>S3: churn_model.pkl</span>
+          </div>
+
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -127,7 +170,7 @@ export default function Header({ activeTab, setActiveTab, apiStatus, modelType, 
             {apiStatus === 'online' ? (
               <>
                 <CheckCircle2 size={13} color="#10b981" />
-                <span style={{ color: '#86efac', fontWeight: 600 }}>FastAPI: 8000</span>
+                <span style={{ color: '#86efac', fontWeight: 600 }}>FastAPI: Connected</span>
               </>
             ) : (
               <>

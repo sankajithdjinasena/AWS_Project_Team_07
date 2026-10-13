@@ -96,6 +96,34 @@ export default function ArchitectureTab() {
         </div>
       </div>
 
+      {/* Visual Cloud Architecture Diagram */}
+      <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Cloud size={20} color="#ff9900" />
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>
+              End-to-End AWS System Architecture Diagram
+            </h3>
+          </div>
+          <a
+            href="/architecture.png"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-secondary"
+            style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
+          >
+            <ExternalLink size={14} /> Open Full Resolution
+          </a>
+        </div>
+        <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border-color)', background: '#0b1120', padding: '0.5rem' }}>
+          <img 
+            src="/architecture.png" 
+            alt="AWS Customer Churn Prediction Architecture" 
+            style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'contain', borderRadius: '8px' }}
+          />
+        </div>
+      </div>
+
       {/* Cloud Architecture Flow */}
       <div style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginBottom: '1rem' }}>
