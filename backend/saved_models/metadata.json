@@ -1,0 +1,226 @@
+{
+  "num_cols": [
+    "tenure",
+    "MonthlyCharges",
+    "TotalCharges"
+  ],
+  "cat_cols": [
+    "gender",
+    "SeniorCitizen",
+    "Partner",
+    "Dependents",
+    "PhoneService",
+    "MultipleLines",
+    "InternetService",
+    "OnlineSecurity",
+    "OnlineBackup",
+    "DeviceProtection",
+    "TechSupport",
+    "StreamingTV",
+    "StreamingMovies",
+    "Contract",
+    "PaperlessBilling",
+    "PaymentMethod"
+  ],
+  "all_feature_names": [
+    "tenure",
+    "MonthlyCharges",
+    "TotalCharges",
+    "gender_Male",
+    "SeniorCitizen_1",
+    "Partner_Yes",
+    "Dependents_Yes",
+    "PhoneService_Yes",
+    "MultipleLines_No phone service",
+    "MultipleLines_Yes",
+    "InternetService_Fiber optic",
+    "InternetService_No",
+    "OnlineSecurity_No internet service",
+    "OnlineSecurity_Yes",
+    "OnlineBackup_No internet service",
+    "OnlineBackup_Yes",
+    "DeviceProtection_No internet service",
+    "DeviceProtection_Yes",
+    "TechSupport_No internet service",
+    "TechSupport_Yes",
+    "StreamingTV_No internet service",
+    "StreamingTV_Yes",
+    "StreamingMovies_No internet service",
+    "StreamingMovies_Yes",
+    "Contract_One year",
+    "Contract_Two year",
+    "PaperlessBilling_Yes",
+    "PaymentMethod_Credit card (automatic)",
+    "PaymentMethod_Electronic check",
+    "PaymentMethod_Mailed check"
+  ],
+  "metrics": {
+    "random_forest": {
+      "name": "SMOTE Random Forest (Primary Champion)",
+      "accuracy": 0.7651,
+      "precision": 0.5413,
+      "recall": 0.754,
+      "f1": 0.6302,
+      "roc_auc": 0.8431
+    },
+    "xgboost": {
+      "name": "Balanced XGBoost (High Recall)",
+      "accuracy": 0.7502,
+      "precision": 0.5188,
+      "recall": 0.8128,
+      "f1": 0.6333,
+      "roc_auc": 0.8436
+    },
+    "logistic_regression": {
+      "name": "SMOTE Logistic Regression (Baseline)",
+      "accuracy": 0.7395,
+      "precision": 0.5059,
+      "recall": 0.7968,
+      "f1": 0.6189,
+      "roc_auc": 0.8401
+    }
+  },
+  "feature_importances": [
+    {
+      "feature": "tenure",
+      "importance": 0.1508
+    },
+    {
+      "feature": "Contract_Two year",
+      "importance": 0.1279
+    },
+    {
+      "feature": "PaymentMethod_Electronic check",
+      "importance": 0.1
+    },
+    {
+      "feature": "TotalCharges",
+      "importance": 0.0746
+    },
+    {
+      "feature": "OnlineSecurity_Yes",
+      "importance": 0.072
+    },
+    {
+      "feature": "InternetService_Fiber optic",
+      "importance": 0.0669
+    },
+    {
+      "feature": "Contract_One year",
+      "importance": 0.0575
+    },
+    {
+      "feature": "MonthlyCharges",
+      "importance": 0.05
+    },
+    {
+      "feature": "PaperlessBilling_Yes",
+      "importance": 0.0386
+    },
+    {
+      "feature": "TechSupport_Yes",
+      "importance": 0.03
+    },
+    {
+      "feature": "DeviceProtection_No internet service",
+      "importance": 0.0275
+    },
+    {
+      "feature": "OnlineBackup_Yes",
+      "importance": 0.0219
+    },
+    {
+      "feature": "Dependents_Yes",
+      "importance": 0.0202
+    },
+    {
+      "feature": "TechSupport_No internet service",
+      "importance": 0.0152
+    },
+    {
+      "feature": "StreamingTV_No internet service",
+      "importance": 0.014
+    }
+  ],
+  "categorical_options": {
+    "gender": [
+      "Female",
+      "Male"
+    ],
+    "SeniorCitizen": [
+      0,
+      1
+    ],
+    "Partner": [
+      "No",
+      "Yes"
+    ],
+    "Dependents": [
+      "No",
+      "Yes"
+    ],
+    "PhoneService": [
+      "No",
+      "Yes"
+    ],
+    "MultipleLines": [
+      "No",
+      "No phone service",
+      "Yes"
+    ],
+    "InternetService": [
+      "DSL",
+      "Fiber optic",
+      "No"
+    ],
+    "OnlineSecurity": [
+      "No",
+      "No internet service",
+      "Yes"
+    ],
+    "OnlineBackup": [
+      "No",
+      "No internet service",
+      "Yes"
+    ],
+    "DeviceProtection": [
+      "No",
+      "No internet service",
+      "Yes"
+    ],
+    "TechSupport": [
+      "No",
+      "No internet service",
+      "Yes"
+    ],
+    "StreamingTV": [
+      "No",
+      "No internet service",
+      "Yes"
+    ],
+    "StreamingMovies": [
+      "No",
+      "No internet service",
+      "Yes"
+    ],
+    "Contract": [
+      "Month-to-month",
+      "One year",
+      "Two year"
+    ],
+    "PaperlessBilling": [
+      "No",
+      "Yes"
+    ],
+    "PaymentMethod": [
+      "Bank transfer (automatic)",
+      "Credit card (automatic)",
+      "Electronic check",
+      "Mailed check"
+    ]
+  },
+  "train_samples": 5634,
+  "test_samples": 1409,
+  "smote_train_samples": 8278,
+  "baseline_churn_rate": 26.54
+}

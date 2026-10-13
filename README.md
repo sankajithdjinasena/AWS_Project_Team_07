@@ -200,8 +200,32 @@ Create AWS Lambda function (`TelcoDatasetValidator`) using `src/lambda_function.
 ### 4. Execute Athena SQL Queries
 Run `src/sql_queries.sql` in the AWS Athena query editor linked to Glue Database `telco_churn_db`.
 
+### 5. Launch Full-Stack Web Application (React JSX + FastAPI)
+
+The solution includes an interactive **React JSX frontend** coupled with a high-performance **FastAPI backend** for real-time customer churn prediction, 1-click customer profile simulations, and automated business retention recommendations.
+
+#### Option A: Quickstart (Single Command)
+```bash
+python run_app.py
+```
+This serves both the **FastAPI REST API** and the compiled **React JSX Web App** on [http://localhost:8000](http://localhost:8000), opening your browser automatically. Interactive Swagger documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs).
+
+#### Option B: Development Mode (Vite HMR + FastAPI)
+1. **Start FastAPI Backend:**
+   ```bash
+   cd backend
+   uvicorn main:app --reload --port 8000
+   ```
+2. **Start React JSX Frontend:**
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+   Open [http://localhost:5173](http://localhost:5173) in your browser. All API requests are automatically reverse-proxied to FastAPI on port 8000.
+
 ---
 
 ## 👥 Individual Contribution Table
 
 *Individual contribution table to be updated by Group 07.*
+

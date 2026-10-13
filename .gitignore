@@ -45,3 +45,13 @@ scratch/
 docs/
 CoreWork
 Final Submission/
+Group07_AWS
+
+Video.wfp
+Group07_AWS.mp4
+
+# Node & Frontend Build Artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.vite/
