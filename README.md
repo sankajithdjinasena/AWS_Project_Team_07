@@ -14,7 +14,7 @@
 - **Faculty & Department**: Department of Data Science, Faculty of Computing
 - **Module**: Cloud Computing & Data Science Group Project
 - **Group**: Group 07
-- **Team Student IDs**: `22CDS0431` | `22CDS027` | `22CDS0403` | `22CDS0439`
+- **Team Student IDs**: `22CDS0431` | `22CDS0427` | `22CDS0403` | `22CDS0439`
 - **Submission Date**: 2026-10-05
 - **GitHub Repository**: [https://github.com/sankajithdjinasena/AWS_Project_Team_07](https://github.com/sankajithdjinasena/AWS_Project_Team_07)
 
@@ -231,5 +231,11 @@ This serves both the **FastAPI REST API** and the compiled **React JSX Web App**
 
 ## 👥 Individual Contribution Table
 
-*Individual contribution table to be updated by Group 07.*
+| Team Member | Index No | Role | Main Contributions |
+|:---|:---|:---|:---|
+| **Sankajith D. Jinasena** | `22CDS0431` | Data Science & ML Lead | Dataset cleaning and preprocessing; EDA and visualizations; feature engineering; SMOTE implementation; development of Logistic Regression, Random Forest, and Focal Loss XGBoost models; model evaluation and comparison. |
+| **Sanodya V. Jinadasa** | `22CDS0427` | AWS Cloud Architecture Lead | Designed the AWS architecture; configured S3 raw and processed storage; implemented IAM and security configurations; developed CloudFormation infrastructure; configured cost-management measures. |
+| **Mohomad Yoosuf** | `22CDS0403` | Cloud Automation & Integration Lead | Developed the AWS Lambda validation function; configured S3 event triggers; implemented CloudWatch logging and monitoring; tested the automated data-ingestion workflow. |
+| **Harol Maxilan** | `22CDS0439` | Analytics, Documentation & Presentation Lead | Configured AWS Glue and Athena analytics; developed and executed SQL queries; interpreted business insights; prepared business recommendations; contributed to the technical report and presentation/demo preparation. |
+
 
